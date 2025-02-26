@@ -22,7 +22,7 @@ fi
 sudo curl -L https://github.com/mikefarah/yq/releases/download/v${VERSION}/${BINARY} -o /usr/local/bin/yq
 
 # Make it executable
-chmod +x /usr/local/bin/yq
+sudo chmod +x /usr/local/bin/yq
 
 # Verify installation
 echo "Installed yq version:"
