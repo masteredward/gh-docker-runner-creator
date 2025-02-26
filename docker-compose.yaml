@@ -1,8 +1,1 @@
 services:
-  tabletop-runner:
-    image: actions-runner:2.322.0
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-      - ./runners/tabletop-runner:/actions-runner
-    privileged: true
-    restart: always

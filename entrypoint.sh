@@ -6,17 +6,14 @@ INSTALL_DIR="/runner-installation"
 RUNTIME_DIR="/actions-runner"
 CONFIG_DIR="${RUNTIME_DIR}/.runner"
 
-# Check if we need to copy files from installation directory to runtime directory
-if [ ! -f "${RUNTIME_DIR}/config.sh" ]; then
-    echo "Initializing runner directory with required files..."
-    cp -a ${INSTALL_DIR}/* ${RUNTIME_DIR}/
-fi
-
 # Change to runtime directory for all operations
 cd ${RUNTIME_DIR}
 
-# Check if this is the first run (no config yet)
-if [ ! -f "${CONFIG_DIR}/config.json" ]; then
+# Check if runtime directory is empty for first deployment
+if [ -z "$(ls -A ${RUNTIME_DIR})" ]; then
+    echo "Initializing empty runner directory with required files..."
+    cp -a ${INSTALL_DIR}/* ${RUNTIME_DIR}/
+    
     # Validate required environment variables
     if [ -z "${REPO_URL}" ] || [ -z "${RUNNER_TOKEN}" ] || [ -z "${RUNNER_NAME}" ]; then
         echo "Error: First run requires REPO_URL, RUNNER_TOKEN, and RUNNER_NAME environment variables"

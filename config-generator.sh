@@ -11,6 +11,23 @@ fi
 REPO_ARGUMENT="$1"
 RUNNER_VERSION="$2"
 
+# Parse repository name for directory check
+if [[ "$REPO_ARGUMENT" == */* ]]; then
+    REPO_NAME=$(echo "$REPO_ARGUMENT" | cut -d'/' -f2)
+else
+    REPO_NAME="$REPO_ARGUMENT"
+fi
+
+# Check if runner directory exists and is not empty
+RUNNER_DIR="runners/${REPO_NAME}-runner"
+if [ -d "$RUNNER_DIR" ] && [ "$(ls -A "$RUNNER_DIR" 2>/dev/null)" ]; then
+    echo "Error: Runner directory $RUNNER_DIR already exists and is not empty."
+    echo "This could indicate that a runner is already configured for this repository."
+    echo "If you want to recreate the runner, please remove the directory first:"
+    echo "  rm -rf $RUNNER_DIR"
+    exit 1
+fi
+
 # Check for runner version
 if [ -z "$RUNNER_VERSION" ]; then
     echo "No runner version specified, detecting latest runner version..."
@@ -96,7 +113,7 @@ if [ -z "$RUNNER_TOKEN" ]; then
 fi
 
 # Create directory for runner configuration (will be needed for persistence)
-mkdir -p runners/${REPO_NAME}-runner
+mkdir -p "$RUNNER_DIR"
 
 # Check if docker-compose.yaml exists
 DOCKER_COMPOSE_FILE="docker-compose.yaml"
@@ -120,7 +137,7 @@ if ! command -v yq &> /dev/null; then
     image: actions-runner:${RUNNER_VERSION}
     volumes:
     - /var/run/docker.sock:/var/run/docker.sock
-    - ./runners/${REPO_NAME}-runner:/actions-runner
+    - ./"$RUNNER_DIR":/actions-runner
     privileged: true
     restart: always
 EOF
@@ -172,7 +189,7 @@ else
       \"image\": \"actions-runner:${RUNNER_VERSION}\",
       \"volumes\": [
         \"/var/run/docker.sock:/var/run/docker.sock\",
-        \"./runners/${REPO_NAME}-runner:/actions-runner\"
+        \"./"$RUNNER_DIR":/actions-runner\"
       ],
       \"privileged\": true,
       \"restart\": \"always\"
@@ -188,19 +205,23 @@ echo "Starting the runner with registration configuration..."
 REPO_URL="https://github.com/$OWNER/$REPO_NAME"
 RUNNER_NAME="${REPO_NAME}-runner"
 
-# Stop any existing service first
-docker compose stop $SERVICE_NAME &>/dev/null || true
-docker compose rm -f $SERVICE_NAME &>/dev/null || true
+echo "Starting runner $SERVICE_NAME first run in 5 seconds. Press Ctrl+C when the Listening for Jobs message is displayed."
+sleep 5
 
 # Run the service with environment variables using docker compose run
-docker compose run -d \
+docker compose run \
   --name "${SERVICE_NAME}" \
   -e REPO_URL="$REPO_URL" \
   -e RUNNER_TOKEN="$RUNNER_TOKEN" \
   -e RUNNER_NAME="$RUNNER_NAME" \
   $SERVICE_NAME
 
-echo "Runner $SERVICE_NAME started successfully!"
-echo "The token is valid for 1 hour, but the runner is already registered now."
-echo "You can view the runner logs with: docker logs -f ${SERVICE_NAME}"
-echo "You can view the runner status on GitHub at: https://github.com/$OWNER/$REPO_NAME/settings/actions/runners"
+docker stop $SERVICE_NAME &>/dev/null || true
+docker rm -f $SERVICE_NAME &>/dev/null || true
+
+echo "Runner stopped after initial setup. Sleeping 5 seconds before restarting it using docker compose up -d"
+sleep 5
+
+docker compose up -d $SERVICE_NAME
+
+echo "Runner restarted and now managed by compose! You can view the runner status on GitHub at: https://github.com/$OWNER/$REPO_NAME/settings/actions/runners"
