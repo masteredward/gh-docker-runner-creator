@@ -137,7 +137,7 @@ if ! command -v yq &> /dev/null; then
     image: actions-runner:${RUNNER_VERSION}
     volumes:
     - /var/run/docker.sock:/var/run/docker.sock
-    - ./"$RUNNER_DIR":/actions-runner
+    - ./${RUNNER_DIR}:/actions-runner
     privileged: true
     restart: always
 EOF
