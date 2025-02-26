@@ -52,12 +52,6 @@ if ! docker image inspect actions-runner:$RUNNER_VERSION &>/dev/null; then
     exit 1
 fi
 
-# Check if gh CLI is installed
-if ! command -v gh &> /dev/null; then
-    echo "Error: GitHub CLI (gh) is not installed or not in PATH"
-    exit 1
-fi
-
 # Check if gh is authenticated
 echo "Verifying GitHub authentication..."
 if ! gh auth status 2>/dev/null; then
@@ -126,77 +120,31 @@ fi
 SERVICE_NAME="${REPO_NAME}-runner"
 echo "Updating docker-compose.yaml with service: $SERVICE_NAME"
 
-# Check if yq is installed (needed for yaml manipulation)
+# Check if yq is installed (required for yaml manipulation)
 if ! command -v yq &> /dev/null; then
-    echo "Warning: yq not installed. Will use sed-based approach (less reliable)"
-    
-    # Create a temporary file with the new service configuration
-    TEMP_SERVICE=$(mktemp)
-    cat > "$TEMP_SERVICE" << EOF
-  ${SERVICE_NAME}:
-    image: actions-runner:${RUNNER_VERSION}
-    volumes:
-    - /var/run/docker.sock:/var/run/docker.sock
-    - ./${RUNNER_DIR}:/actions-runner
-    privileged: true
-    restart: always
-EOF
-
-    # Check if service already exists in docker-compose.yaml
-    if grep -q "^  ${SERVICE_NAME}:" "$DOCKER_COMPOSE_FILE"; then
-        echo "Service $SERVICE_NAME already exists in docker-compose.yaml, updating..."
-        # Create a new file without the existing service
-        awk -v service="${SERVICE_NAME}" 'BEGIN{skip=0} /^  [a-zA-Z0-9_-]+:/{if ($1 == "  " service ":") skip=1; else skip=0} !skip{print}' "$DOCKER_COMPOSE_FILE" > "${DOCKER_COMPOSE_FILE}.new"
-        
-        # Find the line with "services:" to insert the new service after it
-        SERVICE_LINE=$(grep -n "^services:" "${DOCKER_COMPOSE_FILE}.new" | cut -d: -f1)
-        if [ -n "$SERVICE_LINE" ]; then
-            head -n "$SERVICE_LINE" "${DOCKER_COMPOSE_FILE}.new" > "${DOCKER_COMPOSE_FILE}.tmp"
-            cat "$TEMP_SERVICE" >> "${DOCKER_COMPOSE_FILE}.tmp"
-            tail -n +$((SERVICE_LINE + 1)) "${DOCKER_COMPOSE_FILE}.new" >> "${DOCKER_COMPOSE_FILE}.tmp"
-            mv "${DOCKER_COMPOSE_FILE}.tmp" "$DOCKER_COMPOSE_FILE"
-            rm "${DOCKER_COMPOSE_FILE}.new"
-        else
-            echo "Error: Could not find 'services:' line in docker-compose.yaml"
-            rm "${DOCKER_COMPOSE_FILE}.new"
-            exit 1
-        fi
-    else
-        echo "Adding new service $SERVICE_NAME to docker-compose.yaml..."
-        # Find the line with "services:" to insert the new service after it
-        SERVICE_LINE=$(grep -n "^services:" "$DOCKER_COMPOSE_FILE" | cut -d: -f1)
-        if [ -n "$SERVICE_LINE" ]; then
-            head -n "$SERVICE_LINE" "$DOCKER_COMPOSE_FILE" > "${DOCKER_COMPOSE_FILE}.new"
-            cat "$TEMP_SERVICE" >> "${DOCKER_COMPOSE_FILE}.new"
-            tail -n +$((SERVICE_LINE + 1)) "$DOCKER_COMPOSE_FILE" >> "${DOCKER_COMPOSE_FILE}.new"
-            mv "${DOCKER_COMPOSE_FILE}.new" "$DOCKER_COMPOSE_FILE"
-        else
-            echo "Error: Could not find 'services:' line in docker-compose.yaml"
-            exit 1
-        fi
-    fi
-    
-    rm "$TEMP_SERVICE"
-else
-    # Use yq to update docker-compose.yaml (more reliable)
-    echo "Using yq to update docker-compose.yaml"
-    
-    # Create a temporary file for the updated docker-compose
-    TMP_FILE=$(mktemp)
-    
-    # Update or create the service using yq
-    yq e ".services.\"${SERVICE_NAME}\" = {
-      \"image\": \"actions-runner:${RUNNER_VERSION}\",
-      \"volumes\": [
-        \"/var/run/docker.sock:/var/run/docker.sock\",
-        \"./"$RUNNER_DIR":/actions-runner\"
-      ],
-      \"privileged\": true,
-      \"restart\": \"always\"
-    }" "$DOCKER_COMPOSE_FILE" > "$TMP_FILE"
-    
-    mv "$TMP_FILE" "$DOCKER_COMPOSE_FILE"
+    echo "Error: yq is not installed or not in PATH"
+    echo "Please install yq first using: ./utils/install-yq.sh"
+    exit 1
 fi
+
+# Use yq to update docker-compose.yaml
+echo "Using yq to update docker-compose.yaml"
+
+# Create a temporary file for the updated docker-compose
+TMP_FILE=$(mktemp)
+
+# Update or create the service using yq
+yq e ".services.\"${SERVICE_NAME}\" = {
+  \"image\": \"actions-runner:${RUNNER_VERSION}\",
+  \"volumes\": [
+    \"/var/run/docker.sock:/var/run/docker.sock\",
+    \"./"$RUNNER_DIR":/actions-runner\"
+  ],
+  \"privileged\": true,
+  \"restart\": \"always\"
+}" "$DOCKER_COMPOSE_FILE" > "$TMP_FILE"
+
+mv "$TMP_FILE" "$DOCKER_COMPOSE_FILE"
 
 echo "Success! Docker compose configuration updated for runner: ${SERVICE_NAME}"
 
